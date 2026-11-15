@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#E8E6DF" />
+    <meta name="description" content="SOLACE — sistema portátil de energía y comunicación de emergencia. Power when it matters." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>SOLACE</title>
+    <script>
+      // Aplica el tema antes de pintar para evitar el destello.
+      try {
+        var t = localStorage.getItem('solace-theme')
+        if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        document.documentElement.dataset.theme = t
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

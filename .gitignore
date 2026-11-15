@@ -1,0 +1,9 @@
+node_modules/
+dist/
+data/
+.DS_Store
+test-results/
+playwright-report/
+firmware/solace_esp32/secrets.h
+firmware/test/build/
+*.log
