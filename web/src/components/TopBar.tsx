@@ -9,7 +9,7 @@ interface Props {
   onToggleTheme: () => void
 }
 
-export const STALE_MS = 5000
+export const STALE_MS = 10000 // > 3 periodos de telemetría de la ESP32 (3 s)
 
 export function TopBar({ role, theme, onToggleTheme }: Props) {
   const conn = useHub((s) => s.conn)

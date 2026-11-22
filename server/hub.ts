@@ -55,6 +55,8 @@ export interface HubOptions {
   logDir?: string | null
   historySize?: number
   commandTimeoutMs?: number
+  /** Sin telemetría durante este tiempo = dispositivo desconectado (la GUI vuelve a "sin datos"). */
+  deviceStaleMs?: number
   log?: (msg: string) => void
 }
 
@@ -118,7 +120,8 @@ export async function createHub(opts: HubOptions): Promise<Hub> {
   // para los suscriptores de solace/live/#. Serializar preserva el orden y evita la pérdida.
   let queue: Promise<void> = Promise.resolve()
   const publish = (topic: string, payload: unknown, retain = false, qos: 0 | 1 = 0) => {
-    const buf = Buffer.from(JSON.stringify(payload))
+    // Un Buffer vacío retenido borra el mensaje retenido del tópico.
+    const buf = Buffer.isBuffer(payload) ? payload : Buffer.from(JSON.stringify(payload))
     queue = queue.then(
       () => new Promise<void>((resolve) => broker.publish({ cmd: 'publish', topic, payload: buf, qos, retain, dup: false }, () => resolve())),
     )
@@ -150,12 +153,36 @@ export async function createHub(opts: HubOptions): Promise<Hub> {
   const setDevice = (patch: Partial<DeviceInfo>) => {
     const next = { ...deviceInfo, ...patch }
     const changed = next.online !== deviceInfo.online || next.id !== deviceInfo.id || next.ip !== deviceInfo.ip
+    const wentOffline = deviceInfo.online && !next.online
     deviceInfo = next
+    if (wentOffline) {
+      // Borra la telemetría retenida: los clientes vuelven a "sin datos" y los que entren
+      // después no reciben valores viejos como si fueran actuales.
+      store.clearLatest()
+      void publish(TOPICS.liveTelemetry, Buffer.alloc(0), true)
+    }
     if (changed) {
       void publish(TOPICS.liveDevice, deviceInfo, true)
       changeListeners.forEach((f) => f())
     }
   }
+
+  const markOffline = (why: string) => {
+    if (!deviceInfo.online) return
+    setDevice({ online: false })
+    const ev: HubEvent = { kind: 'device', at: Date.now(), online: false }
+    void publish(TOPICS.liveEvent, ev)
+    log(why)
+  }
+
+  // Vigilancia: si la ESP32 pierde el WiFi, el broker tarda ~15 s (keepalive) en notarlo.
+  // Sin telemetría durante deviceStaleMs se considera desconectada.
+  const staleMs = opts.deviceStaleMs ?? 10000 // > 3 periodos de telemetría (3 s)
+  const watchdog = setInterval(() => {
+    if (deviceInfo.online && deviceInfo.lastSeen !== null && Date.now() - deviceInfo.lastSeen > staleMs) {
+      markOffline(`ESP32 sin datos hace más de ${Math.round(staleMs / 1000)} s: desconectada`)
+    }
+  }, 500)
 
   // ─── Ciclo de vida de clientes ─────────────────────────────────────────────────
   broker.on('clientReady', (client) => {
@@ -173,12 +200,7 @@ export async function createHub(opts: HubOptions): Promise<Hub> {
   broker.on('clientDisconnect', (client) => {
     const role = roles.get(client)
     roles.delete(client)
-    if (role === 'device' && countRole('device') === 0) {
-      setDevice({ online: false })
-      const ev: HubEvent = { kind: 'device', at: Date.now(), online: false }
-      void publish(TOPICS.liveEvent, ev)
-      log('ESP32 desconectada')
-    }
+    if (role === 'device' && countRole('device') === 0) markOffline('ESP32 desconectada')
     scheduleStats()
   })
 
@@ -280,8 +302,8 @@ export async function createHub(opts: HubOptions): Promise<Hub> {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8')
     res.setHeader('Content-Disposition', `attachment; filename="solace-${new Date().toISOString().slice(0, 19)}.csv"`)
     // El historial en memoria se reconstruye como CSV con las columnas disponibles.
-    const rows = store.history().map((p) => [new Date(p.t).toISOString(), p.t, p.soc, p.batV, p.batI, p.batP, p.usbP, p.radioP, p.ledP, p.lux ?? '', p.tempC ?? '', p.hum ?? ''].join(','))
-    res.send(['t_iso,t_ms,soc_pct,bat_v,bat_a,bat_w,usb_w,radio_w,led_w_est,lux,temp_c,hum_pct', ...rows].join('\n'))
+    const rows = store.history().map((p) => [new Date(p.t).toISOString(), p.t, p.soc ?? '', p.batV, p.batI, p.batP, p.usbP, p.ledP, p.lux ?? '', p.tempC ?? '', p.pressHpa ?? ''].join(','))
+    res.send(['t_iso,t_ms,soc_pct,bat_v,bat_a,bat_w,usb_w,led_w,lux,temp_c,press_hpa', ...rows].join('\n'))
   })
   app.get('/api/qr.svg', async (req, res) => {
     const url = req.query.target === 'main' ? mainUrl : listenerUrl
@@ -346,6 +368,7 @@ export async function createHub(opts: HubOptions): Promise<Hub> {
     onChange: (cb) => changeListeners.push(cb),
     async close() {
       clearTimeout(statsTimer)
+      clearInterval(watchdog)
       pending.forEach((t) => clearTimeout(t))
       beacon?.stop()
       mdns?.stop()

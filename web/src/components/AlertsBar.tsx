@@ -1,4 +1,4 @@
-import { BatteryWarning, CircleOff, Plug, Thermometer, TriangleAlert } from 'lucide-react'
+import { BatteryWarning, CircleOff, Gauge, Plug, ShieldOff, Thermometer, TriangleAlert } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import type { ReactNode } from 'react'
 import { ALERT_INFO, type AlertCode } from '../../../shared/protocol.ts'
@@ -8,9 +8,14 @@ const ICONS: Record<AlertCode, ReactNode> = {
   BAT_LOW: <BatteryWarning size={16} />,
   BAT_CRITICAL: <BatteryWarning size={16} />,
   TEMP_HIGH: <Thermometer size={16} />,
+  TEMP_CUTOFF: <Thermometer size={16} />,
+  TEMP_GUARD_OFF: <ShieldOff size={16} />,
+  SENSOR_TEMP: <CircleOff size={16} />,
+  USB_LOW_BAT: <Plug size={16} />,
+  USB_BLOCKED: <Plug size={16} />,
+  INA_RANGE: <Gauge size={16} />,
   USB_OUT_OF_SPEC: <Plug size={16} />,
   SENSOR_LUX: <CircleOff size={16} />,
-  SENSOR_DHT: <CircleOff size={16} />,
   SENSOR_POWER: <CircleOff size={16} />,
 }
 

@@ -17,6 +17,10 @@ export function describeCommand(cmd: Command): string {
     }
     case 'setAuto':
       return `ajustó el modo automático (${cmd.luxOn}–${cmd.luxOff} lx)`
+    case 'setUsb':
+      return cmd.on ? 'encendió la carga de celular (USB)' : 'apagó la carga de celular (USB)'
+    case 'setTempGuard':
+      return cmd.mode === 'auto' ? 'activó las protecciones automáticas del USB' : 'pasó el USB a manual (sin protecciones)'
     case 'identify':
       return 'pidió identificar el dispositivo'
   }

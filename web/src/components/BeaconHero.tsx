@@ -73,19 +73,21 @@ export function BeaconHero() {
   }
 
   const { light } = t
-  const ambient = t.env.luxAmbient ?? t.env.lux
+  const ambient = t.env.lux
   const dark = ambient !== null && ambient < light.luxOn
+  const lit = light.outPct > 0
+  const title = lit ? 'Encendida' : 'Apagada'
 
   return (
     <section className="card hero">
       <div className="hero-lamp">
-        <BeaconLamp on={light.on} color={light.color} brightness={light.brightness} />
+        <BeaconLamp on={lit} color={light.color} brightness={light.outPct} />
       </div>
       <div className="hero-info">
-        <p className="eyebrow">Iluminación</p>
+        <p className="eyebrow">Iluminación · tira RGB</p>
         <AnimatePresence mode="wait" initial={false}>
-          <motion.h1 key={light.on ? 'on' : 'off'} className="hero-title" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.22 }}>
-            {light.on ? 'Encendida' : 'Apagada'}
+          <motion.h1 key={title} className="hero-title" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.22 }}>
+            {title}
           </motion.h1>
         </AnimatePresence>
 
@@ -100,8 +102,8 @@ export function BeaconHero() {
               {colorName(light.color)} · {light.brightness}%
             </span>
           )}
-          <span className="chip" title="Consumo estimado de la tira">
-            ≈ {fmtPower(t.power.led.p)}
+          <span className="chip" title="Consumo medido de la tira (INA3221 CH3)">
+            {fmtPower(t.power.led.p)}
           </span>
         </div>
 
@@ -115,7 +117,7 @@ export function BeaconHero() {
 
         {light.mode === 'auto' && (
           <p className="muted small">
-            Se enciende en blanco al 100 % bajo {light.luxOn} lx y se apaga sobre {light.luxOff} lx.
+            Se enciende en blanco en ~1 s bajo {light.luxOn} lx y se apaga tras 3 s sobre {light.luxOff} lx.
           </p>
         )}
       </div>

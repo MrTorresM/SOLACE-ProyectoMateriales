@@ -15,21 +15,24 @@ export function socTone(soc: number, charging: boolean): 'ok' | 'warn' | 'critic
 
 export function BatteryCard() {
   const t = useHub((s) => s.telemetry)
-  const soc = t?.bat.soc ?? 0
-  const charging = t?.bat.charging ?? false
-  const tone = socTone(soc, charging)
-  const animated = useAnimatedValue(soc, 900)
+  const soc = t?.bat.soc ?? null
+  const state = t?.bat.state ?? 'unknown'
+  const charging = state === 'charging'
+  const tone = socTone(soc ?? 100, charging)
+  const animated = useAnimatedValue(soc ?? 0, 900)
   const Icon = charging ? BatteryCharging : tone === 'ok' ? Battery : BatteryWarning
+  const autonomy =
+    state === 'charging' ? 'Cargando' : state === 'resting' ? 'En reposo' : state === 'unknown' ? '—' : fmtDuration(t?.bat.autonomyMin ?? null)
 
   return (
     <section className="card battery" aria-label="Batería">
       <header className="card-head">
         <h2>Batería</h2>
-        <span className="muted small">2S2P Li-ion · 37 Wh</span>
+        <span className="muted small">2S2P Li-ion · {fmt(t?.bat.capacityWh ?? 31.5, 1)} Wh útiles</span>
       </header>
 
       <div className="battery-body">
-        <div className={`ring tone-${tone}`}>
+        <div className={`ring tone-${tone} ${charging ? 'charging' : ''}`}>
           <svg viewBox="0 0 180 180" aria-hidden>
             <circle cx={90} cy={90} r={R} className="ring-track" />
             <circle
@@ -44,15 +47,17 @@ export function BatteryCard() {
           </svg>
           <div className="ring-center">
             <Icon size={18} aria-hidden className="ring-icon" />
-            <div className="ring-value-text">{t ? <AnimatedNumber value={soc} format={(x) => `${Math.round(x)}%`} /> : '—'}</div>
-            <div className="muted small">{!t ? 'sin datos' : charging ? 'Cargando' : tone === 'critical' ? 'Crítica' : tone === 'warn' ? 'Baja' : 'Carga'}</div>
+            <div className="ring-value-text">{t && soc !== null ? <AnimatedNumber value={soc} format={(x) => `${Math.round(x)}%`} /> : '—'}</div>
+            <div className="muted small">
+              {!t || soc === null ? 'sin datos' : charging ? 'Cargando' : tone === 'critical' ? 'Crítica' : tone === 'warn' ? 'Baja' : 'Carga'}
+            </div>
           </div>
         </div>
 
         <dl className="stats">
           <div>
             <dt>Autonomía estimada</dt>
-            <dd className="big">{charging ? 'Cargando' : fmtDuration(t?.derived.autonomyMin ?? null)}</dd>
+            <dd className="big">{autonomy}</dd>
           </div>
           <div className="stats-row">
             <div>
@@ -64,14 +69,14 @@ export function BatteryCard() {
               <dd>{t ? fmtCurrent(t.power.bat.i) : '—'}</dd>
             </div>
             <div>
-              <dt>Potencia</dt>
-              <dd>{t ? fmtPower(t.power.bat.p) : '—'}</dd>
+              <dt>Potencia media</dt>
+              <dd>{t && t.bat.avgPowerW !== null ? fmtPower(t.bat.avgPowerW) : '—'}</dd>
             </div>
           </div>
           <div className="stats-row">
             <div>
               <dt>Energía restante</dt>
-              <dd>{t ? `${fmt(t.derived.remainingWh, 1)} Wh` : '—'}</dd>
+              <dd>{t && t.bat.remainingWh !== null ? `${fmt(t.bat.remainingWh, 1)} Wh` : '—'}</dd>
             </div>
             <div>
               <dt>Consumida (sesión)</dt>

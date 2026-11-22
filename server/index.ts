@@ -71,11 +71,13 @@ function renderStatus(t: LiveTelemetry | null) {
   const parts = [`${dot} ${d.online ? `ESP32 ${d.id ?? ''}` : 'Esperando ESP32…'}`]
   if (t && d.online) {
     parts.push(
-      `SoC ${t.bat.soc.toFixed(0)}%`,
-      `${t.power.bat.p.toFixed(2)} W`,
-      `${(t.env.luxAmbient ?? t.env.lux ?? 0).toFixed(0)} lx`,
+      t.bat.soc === null ? 'SoC —' : `SoC ${t.bat.soc.toFixed(0)}%`,
+      t.bat.state === 'charging' ? c.teal(`⚡ cargando (${t.bat.source ?? '?'}) ${(t.bat.chargeW ?? 0).toFixed(2)} W`) : `${t.power.bat.p.toFixed(2)} W`,
+      `${(t.env.lux ?? 0).toFixed(0)} lx`,
       t.env.tempC === null ? '— °C' : `${t.env.tempC.toFixed(1)} °C`,
-      `luz ${t.light.mode === 'auto' ? 'auto' : 'manual'} ${t.light.on ? 'on' : 'off'}`,
+      `luz ${t.light.mode === 'auto' ? 'auto' : 'manual'} ${t.light.outPct}%`,
+      `USB ${t.protect.usbOn ? 'on' : 'off'}`,
+      ...(t.protect.temp !== 'NORMAL' ? [c.amber(`T ${t.protect.temp}`)] : []),
     )
   }
   parts.push(c.dim(`oyentes ${s.listeners} · control ${s.mains}`))

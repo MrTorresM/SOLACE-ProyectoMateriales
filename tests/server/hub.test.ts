@@ -27,7 +27,8 @@ describe('broker: ESP32 → hub → n suscriptores', () => {
     for (const m of msgs) {
       expect(m.id).toBe('solace-a1b2c3')
       expect(m.receivedAt).toBeTypeOf('number')
-      expect(m.derived.remainingWh).toBeCloseTo((51.3 / 100) * 37, 1)
+      expect(m.bat.remainingWh).toBe(16.16)
+      expect(m.derived.energyWh).toBe(0)
     }
     expect(hub.store.history()).toHaveLength(1)
   })
@@ -40,6 +41,33 @@ describe('broker: ESP32 → hub → n suscriptores', () => {
     const got = nextMessage<LiveTelemetry>(late, TOPICS.liveTelemetry)
     await late.subscribeAsync('solace/live/#')
     expect((await got).seq).toBe(42)
+  })
+
+  it('si la ESP32 deja de enviar datos, la marca desconectada y borra la telemetría retenida', async () => {
+    await hub.close()
+    hub = await startHub({ deviceStaleMs: 600 })
+    const sub = track(await wsClient(hub, 'listener'))
+    await sub.subscribeAsync('solace/live/#')
+    const device = track(await tcpDevice(hub))
+    const first = nextMessage<LiveTelemetry>(sub, TOPICS.liveTelemetry)
+    device.publish(TOPICS.deviceTelemetry, JSON.stringify(FIRMWARE_SAMPLE))
+    await first
+    // Sin más telemetría (p. ej. perdió el WiFi): el broker aún la ve conectada, el vigilante no
+    const cleared = nextMessage<null>(sub, TOPICS.liveTelemetry, (p) => p === null, 3000)
+    const offline = nextMessage<DeviceInfo>(sub, TOPICS.liveDevice, (d) => !d.online, 3000)
+    await Promise.all([cleared, offline])
+    expect(hub.store.latest).toBeNull()
+    // Un cliente que llega después no recibe la telemetría vieja
+    const late = track(await wsClient(hub, 'listener'))
+    const got: string[] = []
+    late.on('message', (t) => got.push(t))
+    await late.subscribeAsync('solace/live/#')
+    await sleep(200)
+    expect(got).not.toContain(TOPICS.liveTelemetry)
+    // Al volver a enviar, vuelve a estar en línea
+    const back = nextMessage<DeviceInfo>(sub, TOPICS.liveDevice, (d) => d.online)
+    device.publish(TOPICS.deviceTelemetry, JSON.stringify({ ...FIRMWARE_SAMPLE, seq: 43 }))
+    await back
   })
 
   it('descarta telemetría inválida sin propagarla', async () => {
@@ -162,7 +190,7 @@ describe('API HTTP', () => {
 
     const history = await fetch(`${base}/api/history?seconds=60`).then((r) => r.json())
     expect(history).toHaveLength(2)
-    expect(history[0]).toMatchObject({ soc: 51.3, batP: 6.409, lux: 3.1 })
+    expect(history[0]).toMatchObject({ soc: 51.3, batP: 10.095, ledP: 4.543, lux: 3.1 })
 
     const latest = await fetch(`${base}/api/latest`).then((r) => r.json())
     expect(latest.seq).toBe(43)

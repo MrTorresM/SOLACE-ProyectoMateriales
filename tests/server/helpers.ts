@@ -30,7 +30,7 @@ export function nextMessage<T = unknown>(c: MqttClient, topic: string, pred: (p:
     }, timeoutMs)
     const on = (t: string, buf: Buffer) => {
       if (t !== topic) return
-      const p = JSON.parse(buf.toString()) as T
+      const p = (buf.length === 0 ? null : JSON.parse(buf.toString())) as T // vacío = retenido borrado
       if (!pred(p)) return
       clearTimeout(timer)
       c.off('message', on)

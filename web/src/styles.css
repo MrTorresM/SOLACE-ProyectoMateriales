@@ -553,30 +553,7 @@ fieldset:disabled button {
 }
 
 /* ─── Flujo de energía ─────────────────────────────────────────────────────── */
-.flow {
-  display: grid;
-  grid-template-columns: 82px minmax(28px, 0.9fr) minmax(0, 2.4fr);
-  align-items: center;
-}
-.flow-source {
-  display: grid;
-  justify-items: center;
-  gap: 4px;
-  padding: 14px 6px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--heading);
-  text-align: center;
-}
-.flow-source-value {
-  font-family: Manrope, sans-serif;
-  font-weight: 700;
-  font-size: 15px;
-}
-.flow-lines {
-  width: 100%;
-  height: 264px;
-}
+/* Usados también por ChargeStatus (SVG) */
 .flow-track {
   fill: none;
   stroke: var(--track);
@@ -587,31 +564,6 @@ fieldset:disabled button {
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
   animation: flow linear infinite;
-}
-.flow-outputs {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-rows: repeat(4, 66px);
-}
-.flow-outputs li {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-  transition: opacity 0.3s;
-}
-.flow-outputs li.idle {
-  opacity: 0.5;
-}
-.flow-icon {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: var(--surface-2);
 }
 .flow-label {
   font-weight: 600;
@@ -650,57 +602,249 @@ fieldset:disabled button {
   border-radius: 2px;
   transition: width 0.6s var(--ease);
 }
-path.flow-usb,
-.flow-icon.flow-usb {
-  stroke: var(--s-usb);
-  color: var(--s-usb);
+
+/* Colores por rama */
+.tone-usb {
+  --c: var(--s-usb);
 }
-path.flow-radio,
-.flow-icon.flow-radio {
-  stroke: var(--s-radio);
-  color: #b9802a;
+.tone-led {
+  --c: var(--s-led);
 }
-:root[data-theme='dark'] .flow-icon.flow-radio {
-  color: var(--amber);
+.tone-other {
+  --c: var(--s-other);
 }
-path.flow-led,
-.flow-icon.flow-led {
-  stroke: var(--s-led);
-  color: var(--s-led);
+
+/* Batería (origen) */
+.pf-source {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  position: relative;
+  transition: box-shadow 0.4s var(--ease);
 }
-path.flow-other,
-.flow-icon.flow-other {
-  stroke: var(--s-other);
-  color: var(--s-other);
+.pf-source.charging {
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--teal) 55%, transparent);
 }
-.bar .flow-usb {
-  background: var(--s-usb);
+.pf-source.idle {
+  opacity: 0.7;
 }
-.bar .flow-radio {
-  background: var(--s-radio);
+.pf-source-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--s-bat);
 }
-.bar .flow-led {
-  background: var(--s-led);
+.pf-source.charging .pf-source-icon {
+  color: var(--accent-text);
 }
-.bar .flow-other {
-  background: var(--s-other);
+.pf-source-label {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--heading);
+}
+.pf-source-value {
+  font-family: Manrope, sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  color: var(--heading);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Anillo que late alrededor de un ícono activo */
+.pf-ping {
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid var(--c, var(--teal));
+  animation: ping 2.2s var(--ease) infinite;
+  pointer-events: none;
+}
+
+/* Barra apilada del reparto */
+.pf-split {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 3px;
+  height: 6px;
+  margin-top: 2px;
+  border-radius: 4px;
+  background: var(--track);
+  overflow: hidden;
+}
+.pf-seg {
+  flex: 0 0 0;
+  min-width: 0;
+  background: var(--c);
+  border-radius: 4px;
+  transition: flex-grow 0.8s var(--ease), opacity 0.4s;
+  background-image: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.35) 50%, transparent 100%);
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  background-color: var(--c);
+  animation: shimmer 2.8s linear infinite;
+}
+
+/* Ramas: cada fila dibuja su propio tramo de cable, así siempre queda alineado */
+.pf-branches {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pf-branch {
+  display: grid;
+  grid-template-columns: 64px 36px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 0;
+  transition: opacity 0.35s;
+}
+.pf-branch.idle .pf-icon,
+.pf-branch.idle .pf-text,
+.pf-branch.idle .pf-value {
+  opacity: 0.5;
+}
+.pf-wire {
+  position: relative;
+  align-self: stretch;
+}
+/* Tronco vertical que baja desde la batería (el de la primera fila sube hasta la tarjeta) */
+.pf-trunk {
+  position: absolute;
+  left: 34.5px; /* centrado bajo el ícono de la batería (14 px de margen + 22 px) */
+  top: -10px;
+  bottom: -10px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--track);
+}
+.pf-branch:last-child .pf-trunk {
+  bottom: calc(50% - 1.5px);
+}
+.pf-wire.live .pf-trunk {
+  background-color: var(--track);
+  background-image: repeating-linear-gradient(180deg, var(--s-bat) 0 7px, transparent 7px 16px);
+  background-size: 100% 16px;
+  animation: pf-down var(--trunk-dur, 2s) linear infinite;
+  opacity: 0.55;
+}
+/* Brazo horizontal hacia la carga */
+.pf-arm {
+  position: absolute;
+  left: 36px;
+  right: -10px;
+  top: 50%;
+  height: var(--w, 2px);
+  transform: translateY(-50%);
+  border-radius: 3px;
+  background: var(--track);
+  transition: height 0.4s var(--ease);
+}
+.pf-branch.active .pf-arm {
+  background-image: repeating-linear-gradient(90deg, var(--c) 0 8px, transparent 8px 16px);
+  background-size: 16px 100%;
+  animation: pf-right var(--dur, 2s) linear infinite;
+}
+.pf-branch.active.estimated .pf-arm {
+  background-image: repeating-linear-gradient(90deg, var(--c) 0 3px, transparent 3px 10px);
+  background-size: 10px 100%;
+}
+/* Chispa que recorre el brazo */
+.pf-spark {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow: 0 0 8px 2px color-mix(in srgb, var(--c) 60%, transparent);
+  animation: pf-spark calc(var(--dur, 2s) * 1.6) var(--ease) infinite;
+}
+.pf-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--c);
+  transition: transform 0.3s var(--ease), background-color 0.3s;
+  z-index: 1;
+}
+.pf-branch.active .pf-icon {
+  background: color-mix(in srgb, var(--c) 16%, var(--surface));
+  animation: breathe 3s var(--ease) infinite;
+}
+.pf-text {
+  min-width: 0;
+}
+.pf-value {
+  text-align: right;
+}
+@keyframes pf-down {
+  to {
+    background-position: 0 16px;
+  }
+}
+@keyframes pf-right {
+  to {
+    background-position: 16px 0;
+  }
+}
+@keyframes pf-spark {
+  0% {
+    left: 0;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    left: calc(100% - 8px);
+    opacity: 0;
+  }
 }
 @media (max-width: 480px) {
-  .flow {
-    grid-template-columns: 66px 20px minmax(0, 1fr);
-  }
-  .flow-outputs li {
-    grid-template-columns: minmax(0, 1fr) auto;
+  .pf-branch {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
     gap: 8px;
   }
-  .flow-icon {
-    display: none !important;
+  .pf-icon {
+    display: none;
+  }
+  .pf-arm {
+    right: 0;
+    left: 32px;
+  }
+  .pf-trunk {
+    left: 30.5px;
   }
   .flow-label {
     font-size: 13px;
   }
-  .flow-source-value {
-    font-size: 13px;
+  .pf-source {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+  .pf-source-icon {
+    width: 36px;
+    height: 36px;
+  }
+  .pf-source-value {
+    font-size: 18px;
   }
 }
 
@@ -846,6 +990,7 @@ path.flow-other,
 }
 .legend-swatch.s-led {
   color: var(--s-led);
+  background: var(--s-led);
 }
 .chart {
   width: 100%;
@@ -1079,6 +1224,84 @@ line.gridline {
 }
 .hint {
   margin: 10px 2px 16px;
+}
+.ctl-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--heading);
+}
+.ctl-title.section {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+.switch-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 2px 0;
+}
+.ctl-section {
+  margin-top: 20px;
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.ctl-section .segmented {
+  display: flex;
+  background: var(--surface);
+}
+.ctl-section .field-label {
+  margin-top: 16px;
+}
+.usb-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+.usb-text {
+  min-width: 0;
+}
+.usb-ctl-icon {
+  --c: var(--teal);
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--muted);
+  transition: color 0.3s, background-color 0.3s;
+}
+.usb-ctl-icon.on {
+  color: var(--accent-text);
+  background: color-mix(in srgb, var(--teal) 18%, var(--surface));
+}
+.usb-ctl-icon.blocked {
+  --c: var(--amber);
+  color: #9a6a1f;
+  animation: blink 0.9s steps(2, jump-none) infinite;
+}
+:root[data-theme='dark'] .usb-ctl-icon.blocked {
+  color: var(--amber);
+}
+.power.blocked {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: var(--graphite);
+}
+.seg-pill.warn {
+  background: color-mix(in srgb, var(--amber) 22%, var(--surface));
+  border-color: color-mix(in srgb, var(--amber) 55%, transparent);
+}
+.guard-hint {
+  margin: 8px 2px 0;
 }
 .manual-controls {
   transition: opacity 0.3s;
@@ -1379,4 +1602,188 @@ line.gridline {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+/* ─── Estado de las salidas y protecciones ──────────────────────────────────── */
+.out-state {
+  margin-top: 2px;
+  font-weight: 600;
+}
+.out-ok {
+  color: var(--accent-text);
+}
+.out-warn,
+.flow-warn {
+  color: #9a6a1f;
+}
+:root[data-theme='dark'] .out-warn,
+:root[data-theme='dark'] .flow-warn {
+  color: var(--amber);
+}
+.out-off {
+  color: var(--muted);
+}
+.temp-state {
+  margin-top: 6px;
+}
+.temp-alarma {
+  color: #9a6a1f;
+}
+.temp-corte,
+.temp-sin_dato {
+  color: var(--critical);
+  font-weight: 600;
+}
+:root[data-theme='dark'] .temp-alarma {
+  color: var(--amber);
+}
+:root[data-theme='dark'] .temp-corte,
+:root[data-theme='dark'] .temp-sin_dato {
+  color: #e58a7e;
+}
+
+/* ─── Estado de carga (cargando / en operación) ─────────────────────────────── */
+.area-charge {
+  grid-column: 1 / -1 !important;
+}
+.charge-status {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  align-items: center;
+  gap: 18px 28px;
+  transition: background 0.5s var(--ease), box-shadow 0.5s var(--ease);
+}
+.charge-status.mode-charging {
+  background: linear-gradient(110deg, var(--surface) 0%, color-mix(in srgb, var(--teal) 10%, var(--surface)) 50%, var(--surface) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 4s linear infinite;
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--teal) 45%, transparent);
+}
+.cs-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: var(--surface-2);
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.cs-badge.mode-charging {
+  background: var(--teal);
+  color: #fff;
+  animation: blink 1.6s ease-in-out infinite;
+}
+.cs-badge.mode-operating {
+  background: var(--deep);
+  color: var(--white);
+}
+:root[data-theme='dark'] .cs-badge.mode-operating {
+  background: var(--white);
+  color: var(--deep);
+}
+.cs-title {
+  margin: 0;
+  font-family: Manrope, sans-serif;
+  font-size: 22px;
+  color: var(--heading);
+}
+.cs-detail {
+  margin: 2px 0 0;
+}
+.cs-diagram {
+  display: grid;
+  grid-template-columns: auto minmax(24px, 1fr) auto minmax(24px, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+.cs-node {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  text-align: center;
+  color: var(--muted);
+  transition: color 0.4s var(--ease);
+}
+.cs-node-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  transition: background 0.4s var(--ease), color 0.4s var(--ease);
+}
+.cs-node-label {
+  font-size: 12px;
+  font-weight: 600;
+  max-width: 96px;
+  line-height: 1.2;
+}
+.cs-node.active {
+  color: var(--heading);
+}
+.cs-node.active .cs-node-icon {
+  color: #fff;
+}
+.cs-node.active.tone-solar .cs-node-icon {
+  background: var(--amber);
+}
+.cs-node.active.tone-usb .cs-node-icon {
+  background: var(--teal);
+}
+.cs-node.active.tone-bat .cs-node-icon {
+  background: var(--deep);
+}
+:root[data-theme='dark'] .cs-node.active.tone-bat .cs-node-icon {
+  background: var(--white);
+  color: var(--deep);
+}
+.cs-ping {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: inherit;
+  animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+  z-index: -1;
+}
+.cs-node-icon {
+  isolation: isolate;
+}
+.cs-link {
+  width: 100%;
+  height: 10px;
+  margin-bottom: 22px; /* alinea la línea con el centro de los íconos */
+}
+path.cs-dash.tone-solar {
+  stroke: var(--amber);
+}
+path.cs-dash.tone-usb {
+  stroke: var(--teal);
+}
+path.cs-dash.tone-bat {
+  stroke: var(--s-bat);
+}
+:root[data-theme='dark'] path.cs-dash.tone-bat {
+  stroke: var(--white);
+}
+@media (max-width: 700px) {
+  .charge-status {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cs-node-label {
+    font-size: 11px;
+    max-width: 72px;
+  }
+}
+.ring.charging .ring-value {
+  stroke: var(--teal);
+  animation: blink 1.6s ease-in-out infinite;
+}
+.ring.charging .ring-icon {
+  color: var(--teal);
 }

@@ -5,6 +5,7 @@ import { ActivityFeed } from '../components/ActivityFeed.tsx'
 import { AlertsBar } from '../components/AlertsBar.tsx'
 import { BatteryCard } from '../components/BatteryCard.tsx'
 import { BeaconHero } from '../components/BeaconHero.tsx'
+import { ChargeStatus } from '../components/ChargeStatus.tsx'
 import { ControlPanel } from '../components/ControlPanel.tsx'
 import { EnvCard } from '../components/EnvCard.tsx'
 import { PowerFlow } from '../components/PowerFlow.tsx'
@@ -36,26 +37,29 @@ export function Dashboard({ role, theme, onToggleTheme }: { role: 'main' | 'list
 
       <div className={`layout ${role === 'main' ? 'with-controls' : ''}`}>
         <main className="grid">
-          <Reveal i={0} className="area-hero">
+          <Reveal i={0} className="area-charge">
+            <ChargeStatus />
+          </Reveal>
+          <Reveal i={1} className="area-hero">
             <BeaconHero />
           </Reveal>
-          <Reveal i={1} className="area-battery">
+          <Reveal i={2} className="area-battery">
             <BatteryCard />
           </Reveal>
-          <Reveal i={2} className="area-flow">
+          <Reveal i={3} className="area-flow">
             <PowerFlow />
           </Reveal>
-          <Reveal i={3} className="area-env">
+          <Reveal i={4} className="area-env">
             <EnvCard />
           </Reveal>
-          <Reveal i={4} className="area-chart">
+          <Reveal i={5} className="area-chart">
             <TrendChart />
           </Reveal>
-          <Reveal i={5} className="area-activity">
+          <Reveal i={6} className="area-activity">
             <ActivityFeed />
           </Reveal>
           {role === 'main' && (
-            <Reveal i={6} className="area-share">
+            <Reveal i={7} className="area-share">
               <SharePanel />
             </Reveal>
           )}

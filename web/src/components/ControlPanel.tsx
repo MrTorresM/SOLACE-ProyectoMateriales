@@ -5,6 +5,7 @@ import { HexColorPicker } from 'react-colorful'
 import type { Command, LightState } from '../../../shared/protocol.ts'
 import { useHub, useHubClient, useStore } from '../lib/context.tsx'
 import { makeId } from '../lib/hubClient.ts'
+import { UsbControl } from './UsbControl.tsx'
 
 export const PRESETS = [
   { hex: '#FFFFFF', name: 'Blanco' },
@@ -16,7 +17,7 @@ export const PRESETS = [
   { hex: '#B400FF', name: 'Violeta' },
 ]
 
-const DEFAULT_DRAFT: LightState = { mode: 'auto', on: false, color: '#FFFFFF', brightness: 80, luxOn: 15, luxOff: 40 }
+const DEFAULT_DRAFT: LightState = { mode: 'auto', on: false, color: '#FFFFFF', brightness: 80, luxOn: 10, luxOff: 200, outPct: 0 }
 /** Tras una interacción local, ignorar la telemetría durante este tiempo (evita "saltos" del control). */
 const LOCAL_HOLD_MS = 1500
 const THROTTLE_MS = 140
@@ -24,6 +25,7 @@ const THROTTLE_MS = 140
 export function ControlPanel() {
   const light = useHub((s) => s.telemetry?.light)
   const online = useHub((s) => s.device.online)
+  const switchLight = useHub((s) => s.telemetry?.switches.light ?? false)
   const client = useHubClient()
   const store = useStore()
   const [draft, setDraft] = useState<LightState>(light ?? DEFAULT_DRAFT)
@@ -106,7 +108,7 @@ export function ControlPanel() {
   return (
     <aside className={`controls ${open ? 'open' : ''}`} aria-label="Panel de control">
       <header className="controls-head">
-        <h2>Control de luz</h2>
+        <h2>Panel de control</h2>
         <div className="controls-head-right">
           {busy > 0 && <Loader2 size={16} className="spin muted" aria-label="Enviando" />}
           <button className="icon-btn sheet-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label={open ? 'Contraer panel' : 'Expandir panel'}>
@@ -118,6 +120,7 @@ export function ControlPanel() {
       {disabled && <p className="notice">El dispositivo no está conectado. Los controles se activarán cuando vuelva.</p>}
 
       <fieldset disabled={disabled} className="controls-body">
+        <h3 className="ctl-title section">Luz</h3>
         <div className="quick">
           <div className="segmented big" role="radiogroup" aria-label="Modo de la luz">
             {(['auto', 'manual'] as const).map((m) => (
@@ -196,6 +199,14 @@ export function ControlPanel() {
             Guardar umbrales
           </button>
         </details>
+
+        {light && (
+          <p className="muted tiny switch-state">
+            Interruptor físico de la luz: {switchLight ? 'cerrado' : 'abierto'} · cada movimiento enciende (blanco 100 %) o apaga
+          </p>
+        )}
+
+        <UsbControl send={send} />
 
         <button className="btn ghost" onClick={() => void send({ type: 'identify' })}>
           <Radar size={16} aria-hidden /> Identificar dispositivo

@@ -32,8 +32,7 @@ export const TABS: Tab[] = [
     series: [
       { key: 'bat', label: 'Batería', get: (p) => p.batP, cls: 's-bat' },
       { key: 'usb', label: 'USB 5 V', get: (p) => p.usbP, cls: 's-usb' },
-      { key: 'radio', label: 'Radio 3 V', get: (p) => p.radioP, cls: 's-radio' },
-      { key: 'led', label: 'LED (est.)', get: (p) => p.ledP, cls: 's-led', dashed: true },
+      { key: 'led', label: 'Tira LED', get: (p) => p.ledP, cls: 's-led' },
     ],
   },
   { id: 'soc', label: 'Batería', unit: '%', decimals: 0, min: 0, max: 100, series: [{ key: 'soc', label: 'Carga', get: (p) => p.soc, cls: 's-bat' }] },

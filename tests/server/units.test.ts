@@ -56,28 +56,28 @@ describe('descubrimiento por beacon UDP', () => {
 })
 
 describe('TelemetryStore', () => {
-  it('integra la energía y estima la autonomía', () => {
+  it('integra la energía consumida en la sesión', () => {
     const s = new TelemetryStore()
     const t0 = 1_000_000
-    for (let k = 0; k <= 60; k++) s.ingest(sample, t0 + k * 1000) // 6.409 W durante 60 s
-    const d = s.latest!.derived
-    expect(d.energyWh).toBeCloseTo((6.409 * 60) / 3600, 3)
-    expect(d.avgPowerW).toBeCloseTo(6.409, 2)
-    expect(d.remainingWh).toBeCloseTo(18.98, 1)
-    expect(d.autonomyMin).toBe(Math.round((18.981 / 6.409) * 60))
+    for (let k = 0; k <= 60; k++) s.ingest(sample, t0 + k * 1000) // 10.095 W durante 60 s
+    expect(s.latest!.derived.energyWh).toBeCloseTo((10.095 * 60) / 3600, 3)
+    // La autonomía y la energía restante vienen del firmware, tal cual
+    expect(s.latest!.bat).toMatchObject({ remainingWh: 16.16, autonomyMin: 97, state: 'discharging' })
   })
 
   it('no inventa energía en huecos largos (ESP32 desconectada)', () => {
     const s = new TelemetryStore()
     s.ingest(sample, 0)
     s.ingest(sample, 3_600_000) // una hora después
-    expect(s.latest!.derived.energyWh).toBeLessThan(0.01)
+    expect(s.latest!.derived.energyWh).toBeLessThanOrEqual((10.095 * 5) / 3600) // como máximo 5 s de hueco
   })
 
-  it('sin autonomía mientras carga', () => {
+  it('no cuenta energía mientras carga', () => {
     const s = new TelemetryStore()
-    s.ingest({ ...sample, bat: { soc: 50, charging: true } }, 0)
-    expect(s.latest!.derived.autonomyMin).toBeNull()
+    const charging = { ...sample, power: { ...sample.power, bat: { ...sample.power.bat, i: -0.8, p: -6.4 } }, bat: { ...sample.bat, state: 'charging' as const } }
+    s.ingest(charging, 0)
+    s.ingest(charging, 1000)
+    expect(s.latest!.derived.energyWh).toBe(0)
   })
 
   it('limita el historial y lo filtra por tiempo', () => {
@@ -97,6 +97,8 @@ describe('TelemetryStore', () => {
     expect(lines[0]).toBe(CSV_HEADER)
     expect(lines).toHaveLength(3)
     expect(lines[1]!.split(',')).toHaveLength(CSV_HEADER.split(',').length)
+    const row = Object.fromEntries(CSV_HEADER.split(',').map((k, i) => [k, lines[1]!.split(',')[i]]))
+    expect(row).toMatchObject({ soc_pct: '51.3', led_w: '4.543', temp_state: 'NORMAL', usb_requested: '1', usb_on: '1', charge_source: '', out_pct: '80', alerts: '' })
     fs.rmSync(dir, { recursive: true })
   })
 })

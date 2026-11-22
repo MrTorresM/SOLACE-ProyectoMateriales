@@ -52,11 +52,10 @@ export function telemetryToPoint(t: LiveTelemetry): HistoryPoint {
     batI: t.power.bat.i,
     batP: t.power.bat.p,
     usbP: t.power.usb.p,
-    radioP: t.power.radio.p,
     ledP: t.power.led.p,
-    lux: t.env.luxAmbient ?? t.env.lux,
+    lux: t.env.lux,
     tempC: t.env.tempC,
-    hum: t.env.hum,
+    pressHpa: t.env.pressHpa,
   }
 }
 
@@ -71,7 +70,9 @@ function mergeHistory(a: HistoryPoint[], b: HistoryPoint[]): HistoryPoint[] {
 export function reduce(state: HubState, action: Action): HubState {
   switch (action.type) {
     case 'conn':
-      return state.conn === action.conn ? state : { ...state, conn: action.conn }
+      if (state.conn === action.conn) return state
+      // Sin hub no hay datos en vivo: la GUI vuelve a "sin datos" hasta reconectar.
+      return { ...state, conn: action.conn, telemetry: action.conn === 'online' ? state.telemetry : null }
     case 'history':
       return { ...state, history: mergeHistory(state.history, action.points) }
     case 'toast':
@@ -84,6 +85,8 @@ export function reduce(state: HubState, action: Action): HubState {
 }
 
 function reduceMessage(state: HubState, topic: string, payload: unknown): HubState {
+  // Telemetría borrada (dispositivo desconectado): todo vuelve a "sin datos".
+  if (topic === TOPICS.liveTelemetry && payload === null) return state.telemetry ? { ...state, telemetry: null } : state
   if (payload === null || typeof payload !== 'object') return state
   switch (topic) {
     case TOPICS.liveTelemetry: {
@@ -94,8 +97,11 @@ function reduceMessage(state: HubState, topic: string, payload: unknown): HubSta
         last && last.t >= t.receivedAt ? state.history : [...state.history, telemetryToPoint(t)].slice(-HISTORY_LIMIT)
       return { ...state, telemetry: t, history }
     }
-    case TOPICS.liveDevice:
-      return { ...state, device: payload as DeviceInfo }
+    case TOPICS.liveDevice: {
+      const device = payload as DeviceInfo
+      // Dispositivo desconectado: se descartan los últimos datos (la GUI muestra "—").
+      return { ...state, device, telemetry: device.online ? state.telemetry : null }
+    }
     case TOPICS.liveHub:
       return { ...state, hub: payload as HubStats }
     case TOPICS.liveEvent:

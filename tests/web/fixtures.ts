@@ -8,7 +8,7 @@ export function liveSample(patch: Partial<LiveTelemetry> = {}): LiveTelemetry {
   return {
     ...(structuredClone(FIRMWARE_SAMPLE) as unknown as LiveTelemetry),
     receivedAt: Date.now(),
-    derived: { energyWh: 0.42, avgPowerW: 6.4, autonomyMin: 178, remainingWh: 18.98 },
+    derived: { energyWh: 0.42 },
     ...patch,
   }
 }

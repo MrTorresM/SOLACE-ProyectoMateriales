@@ -1,13 +1,35 @@
-import { Droplets, Sun, Thermometer } from 'lucide-react'
+import { Gauge, Sun, Thermometer } from 'lucide-react'
 import { useHub } from '../lib/context.tsx'
 import { fmt, fmtLux, luxLabel } from '../lib/format.ts'
 import { AnimatedNumber } from './AnimatedNumber.tsx'
 import { ALERT_THRESHOLDS } from '../../../shared/deviceLogic.ts'
+import type { TempState } from '../../../shared/protocol.ts'
 
 /** Posición 0–100 % de un valor de lux en escala logarítmica (0.1 lx … 100 klx). */
 export function luxToPct(lux: number | null): number {
   if (lux === null || lux <= 0.1) return 0
   return Math.min(100, (Math.log10(lux / 0.1) / 6) * 100)
+}
+
+/** Con el USB en manual la temperatura no corta el USB. */
+export const TEMP_LABEL_MANUAL: Record<TempState, string> = {
+  NORMAL: 'manual · normal',
+  ALARMA: 'manual · alarma (≥ 45 °C)',
+  CORTE: 'manual · sobre el corte (≥ 50 °C), el USB no se apaga',
+  SIN_DATO: 'manual · sin dato del sensor, el USB no se apaga',
+}
+
+export const TEMP_LABEL: Record<TempState, string> = {
+  NORMAL: 'normal',
+  ALARMA: 'alarma (≥ 45 °C)',
+  CORTE: 'corte: USB apagado hasta bajar de 40 °C',
+  SIN_DATO: 'sin dato del sensor: USB apagado',
+}
+
+/** Posición 0–100 % de la presión entre 700 y 1050 hPa (de ~3000 m a nivel del mar). */
+export function pressToPct(hPa: number | null): number {
+  if (hPa === null) return 0
+  return Math.max(0, Math.min(100, ((hPa - 700) / 350) * 100))
 }
 
 function Scale({ pct, marks, tone }: { pct: number; marks?: { at: number; label: string }[]; tone?: 'warn' }) {
@@ -28,37 +50,49 @@ function Scale({ pct, marks, tone }: { pct: number; marks?: { at: number; label:
 export function EnvCard() {
   const t = useHub((s) => s.telemetry)
   const temp = t?.env.tempC ?? null
-  const hum = t?.env.hum ?? null
-  const lux = t ? (t.env.luxAmbient ?? t.env.lux) : null
+  const press = t?.env.pressHpa ?? null
+  const lux = t?.env.lux ?? null
+  const tempState = t?.protect.temp ?? null
+  const manual = t?.protect.tempGuard === 'manual'
   const hot = temp !== null && temp >= ALERT_THRESHOLDS.tempHighC
 
   return (
     <section className="card env" aria-label="Ambiente">
       <header className="card-head">
         <h2>Ambiente</h2>
-        <span className="muted small">DHT11 · BH1750</span>
+        <span className="muted small">BMP280 · BH1750</span>
       </header>
 
       <div className="env-item">
         <div className="env-head">
           <Thermometer size={18} aria-hidden />
-          <span>Temperatura</span>
+          <span>Temperatura del banco</span>
           <strong className="env-value">{temp === null ? '—' : <AnimatedNumber value={temp} format={(x) => `${fmt(x, 1)} °C`} />}</strong>
         </div>
         <Scale
           pct={temp === null ? 0 : Math.max(0, Math.min(100, (temp / 60) * 100))}
           tone={hot ? 'warn' : undefined}
-          marks={[{ at: (ALERT_THRESHOLDS.tempHighC / 60) * 100, label: `${ALERT_THRESHOLDS.tempHighC}°` }]}
+          marks={[
+            { at: (ALERT_THRESHOLDS.tempHighC / 60) * 100, label: `${ALERT_THRESHOLDS.tempHighC}°` },
+            { at: (ALERT_THRESHOLDS.tempCutC / 60) * 100, label: `${ALERT_THRESHOLDS.tempCutC}°` },
+          ]}
         />
+        {tempState && <p className={`muted tiny temp-state temp-${tempState.toLowerCase()}`}>Protección térmica: {(manual ? TEMP_LABEL_MANUAL : TEMP_LABEL)[tempState]}</p>}
       </div>
 
       <div className="env-item">
         <div className="env-head">
-          <Droplets size={18} aria-hidden />
-          <span>Humedad relativa</span>
-          <strong className="env-value">{hum === null ? '—' : <AnimatedNumber value={hum} format={(x) => `${fmt(x, 0)} %`} />}</strong>
+          <Gauge size={18} aria-hidden />
+          <span>Presión</span>
+          <strong className="env-value">{press === null ? '—' : <AnimatedNumber value={press} format={(x) => `${fmt(x, 0)} hPa`} />}</strong>
         </div>
-        <Scale pct={hum ?? 0} />
+        <Scale
+          pct={pressToPct(press)}
+          marks={[
+            { at: pressToPct(750), label: '750' },
+            { at: pressToPct(1013), label: '1013 hPa' },
+          ]}
+        />
       </div>
 
       <div className="env-item">

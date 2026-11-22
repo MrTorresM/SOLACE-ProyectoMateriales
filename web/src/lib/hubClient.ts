@@ -58,6 +58,8 @@ export function connectHub(role: 'main' | 'listener', store: Store, opts: Connec
     if (store.getState().conn === 'online') store.dispatch({ type: 'conn', conn: 'offline' })
   })
   client.on('message', (topic, buf) => {
+    // Mensaje vacío = el hub borró el retenido (p. ej. la telemetría al desconectarse la ESP32).
+    if (buf.length === 0) return store.dispatch({ type: 'message', topic, payload: null })
     let payload: unknown
     try {
       payload = JSON.parse(buf.toString())

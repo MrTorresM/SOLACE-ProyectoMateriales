@@ -8,10 +8,10 @@
  */
 import { z } from 'zod'
 
-export const PROTOCOL_VERSION = 1
+export const PROTOCOL_VERSION = 4
 
 export const TOPICS = {
-  /** ESP32 → hub: telemetría cruda (1 Hz). */
+  /** ESP32 → hub: telemetría cruda (cada 3 s, y al instante tras un cambio). */
   deviceTelemetry: 'solace/device/telemetry',
   /** ESP32 → hub: "online" | "offline" (retenido, LWT). */
   deviceStatus: 'solace/device/status',
@@ -46,17 +46,48 @@ export const DISCOVERY = {
 } as const
 
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Color debe ser #RRGGBB')
-const channel = z.object({ v: z.number(), i: z.number(), p: z.number() })
 const nullableNum = z.number().nullable()
+
+/** Estado de rango de un canal del INA3221 (calibración de la caracterización: ±1500 mA). */
+export const InaRange = z.enum(['OK', 'FUERA_CAL', 'SATURADO'])
+export type InaRange = z.infer<typeof InaRange>
+/** Canal del INA3221 calibrado: V, A (+ = sale de la batería / hacia la carga), W y rango. */
+const channel = z.object({ v: z.number(), i: z.number(), p: z.number(), st: InaRange })
+
+export const LuxState = z.enum(['OK', 'BAJO_RANGO', 'SOBRE_RANGO', 'SATURADO', 'ERROR', 'SIN_DATO'])
+export type LuxState = z.infer<typeof LuxState>
+
+/** Protección térmica (BMP280 pegado al banco). */
+export const TempState = z.enum(['NORMAL', 'ALARMA', 'CORTE', 'SIN_DATO'])
+export type TempState = z.infer<typeof TempState>
+
+/** Protecciones del USB: 'auto' = temperatura, INA, batería y sobrecorriente pueden apagarlo; 'manual' = ninguna. */
+export const TempGuard = z.enum(['auto', 'manual'])
+export type TempGuard = z.infer<typeof TempGuard>
+
+export const BatState = z.enum(['discharging', 'resting', 'charging', 'unknown'])
+export type BatState = z.infer<typeof BatState>
+
+/**
+ * Origen de la carga de la batería (CH1 negativo). 'unknown' = hay luz y no está
+ * cableado el detector de la entrada USB, así que puede ser panel o USB.
+ */
+export const ChargeSource = z.enum(['solar', 'usb', 'unknown'])
+export type ChargeSource = z.infer<typeof ChargeSource>
 
 export const AlertCode = z.enum([
   'BAT_LOW',
   'BAT_CRITICAL',
   'TEMP_HIGH',
+  'TEMP_CUTOFF',
+  'SENSOR_TEMP',
+  'USB_LOW_BAT',
+  'USB_BLOCKED',
+  'INA_RANGE',
   'USB_OUT_OF_SPEC',
   'SENSOR_LUX',
-  'SENSOR_DHT',
   'SENSOR_POWER',
+  'TEMP_GUARD_OFF',
 ])
 export type AlertCode = z.infer<typeof AlertCode>
 
@@ -65,11 +96,14 @@ export type LightMode = z.infer<typeof LightMode>
 
 export const LightState = z.object({
   mode: LightMode,
+  /** Lo que pide el modo actual (auto: según la luz; manual: el usuario). */
   on: z.boolean(),
   color: hexColor,
   brightness: z.number().min(0).max(100),
   luxOn: z.number().min(0),
   luxOff: z.number().min(0),
+  /** Brillo aplicado a la tira (0–100 %); 0 si está apagada. La tira no tiene cortes de protección. */
+  outPct: z.number().min(0).max(100),
 })
 export type LightState = z.infer<typeof LightState>
 
@@ -79,28 +113,51 @@ export const Telemetry = z.object({
   seq: z.number().int().nonnegative(),
   uptime: z.number().nonnegative(),
   env: z.object({
-    /** Lectura cruda del BH1750 (incluye la luz de la propia tira). */
+    /** BH1750 corregido con la caracterización (nominal bajo 54 lx). */
     lux: nullableNum,
-    /** Luz ambiente estimada (muestreo con la tira apagada unos ms). Se usa para el modo auto. */
-    luxAmbient: nullableNum,
+    luxState: LuxState,
+    /** BMP280 con offset de la caracterización. */
     tempC: nullableNum,
-    hum: nullableNum,
+    pressHpa: nullableNum,
   }),
   power: z.object({
-    /** INA3221 CH1 — salida de batería. i > 0 descarga, i < 0 carga. */
+    /** INA3221 CH1 — batería (neto). i > 0 descarga, i < 0 carga. */
     bat: channel,
-    /** INA3221 CH2 — step-down 5 V (carga de celular). */
+    /** INA3221 CH2 — salida USB 5 V (carga de celular). */
     usb: channel,
-    /** INA3221 CH3 — step-down 3 V (radio AM). */
-    radio: channel,
-    /** Tira LED — estimada con el modelo de consumo WS2812B. */
-    led: z.object({ p: z.number(), est: z.literal(true) }),
+    /** INA3221 CH3 — tira LED RGB 5 V (medida). */
+    led: channel,
   }),
   bat: z.object({
-    soc: z.number().min(0).max(100),
-    charging: z.boolean(),
+    /** Estado de carga por conteo de energía (null en los primeros 2 s). */
+    soc: z.number().min(0).max(100).nullable(),
+    state: BatState,
+    remainingWh: nullableNum,
+    /** Potencia media de la batería (suavizada, τ = 30 s). */
+    avgPowerW: nullableNum,
+    /** Minutos restantes; null en reposo, cargando o sin dato. */
+    autonomyMin: nullableNum,
+    capacityWh: z.number().positive(),
+    /** Origen de la carga mientras state = 'charging'; null si no carga. */
+    source: ChargeSource.nullable(),
+    /** Potencia que entra a la batería (W) mientras carga; null si no carga. */
+    chargeW: nullableNum,
   }),
   light: LightState,
+  /** Salida USB de 5 V (interruptor físico o app + protecciones). La tira no tiene cortes. */
+  protect: z.object({
+    temp: TempState,
+    /** Protecciones del USB (se eligen en la app; arranca en 'auto'). En 'manual' no se evalúa ninguna. */
+    tempGuard: TempGuard,
+    /** Lo que pidieron el interruptor USB o la app (la última acción manda). */
+    usbRequested: z.boolean(),
+    /** Estado real de la salida (MOSFET). */
+    usbOn: z.boolean(),
+    usbLowBat: z.boolean(),
+    usbBlocked: z.boolean(),
+  }),
+  /** Posición de los interruptores físicos (true = cerrado). */
+  switches: z.object({ usb: z.boolean(), light: z.boolean() }),
   alerts: z.array(AlertCode),
   net: z.object({ rssi: z.number(), ip: z.string() }),
 })
@@ -126,6 +183,10 @@ export const Command = z.discriminatedUnion('type', [
       luxOff: z.number().min(0).max(10000),
     })
     .refine((c) => c.luxOff > c.luxOn, { message: 'luxOff debe ser mayor que luxOn (histéresis)' }),
+  /** Pide encender o apagar la salida USB de 5 V (mismo efecto que el interruptor). */
+  z.object({ type: z.literal('setUsb'), on: z.boolean() }),
+  /** Protecciones del USB: automáticas o manual (sin protecciones). */
+  z.object({ type: z.literal('setTempGuard'), mode: TempGuard }),
   z.object({ type: z.literal('identify') }),
 ])
 export type Command = z.infer<typeof Command>
@@ -148,12 +209,6 @@ export type Ack = z.infer<typeof Ack>
 export interface Derived {
   /** Energía extraída de la batería desde que arrancó el hub (Wh). */
   energyWh: number
-  /** Potencia media de la batería (EMA ~60 s). */
-  avgPowerW: number
-  /** Autonomía estimada con la potencia media actual (min). null si no aplica. */
-  autonomyMin: number | null
-  /** Energía restante estimada en el banco (Wh). */
-  remainingWh: number
 }
 
 export interface LiveTelemetry extends Telemetry {
@@ -185,9 +240,14 @@ export type HubEvent =
 export const ALERT_INFO: Record<AlertCode, { label: string; level: 'warn' | 'critical' | 'info' }> = {
   BAT_LOW: { label: 'Batería baja', level: 'warn' },
   BAT_CRITICAL: { label: 'Batería crítica', level: 'critical' },
-  TEMP_HIGH: { label: 'Temperatura alta', level: 'critical' },
+  TEMP_HIGH: { label: 'Temperatura alta (≥ 45 °C)', level: 'warn' },
+  TEMP_CUTOFF: { label: 'Corte por temperatura: USB apagado', level: 'critical' },
+  SENSOR_TEMP: { label: 'Sin sensor de temperatura (BMP280)', level: 'critical' },
+  USB_LOW_BAT: { label: 'USB apagado por batería baja', level: 'warn' },
+  USB_BLOCKED: { label: 'USB bloqueado 30 s por sobrecorriente', level: 'warn' },
+  INA_RANGE: { label: 'Corriente fuera del rango calibrado', level: 'warn' },
   USB_OUT_OF_SPEC: { label: 'Salida USB fuera de 4,75–5,25 V', level: 'warn' },
   SENSOR_LUX: { label: 'Sensor de luz sin respuesta', level: 'info' },
-  SENSOR_DHT: { label: 'Sensor de temperatura sin respuesta', level: 'info' },
-  SENSOR_POWER: { label: 'Sensor de potencia sin respuesta', level: 'info' },
+  SENSOR_POWER: { label: 'Sin sensor de potencia (INA3221)', level: 'critical' },
+  TEMP_GUARD_OFF: { label: 'USB en manual: sin protecciones', level: 'warn' },
 }
